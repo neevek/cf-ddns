@@ -1,0 +1,74 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (macOS/Linux)
+        if: runner.os != 'Windows'
+        run: |
+          set -euo pipefail
+          bin_name="cf-ddns"
+          target_dir="target/${{ matrix.target }}/release"
+          pkg_name="${bin_name}-${{ matrix.target }}"
+          mkdir -p dist
+          cp "${target_dir}/${bin_name}" "dist/${bin_name}"
+          tar -czf "dist/${pkg_name}.tar.gz" -C dist "${bin_name}"
+          rm -f "dist/${bin_name}"
+          if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "dist/${pkg_name}.tar.gz" > "dist/SHA256SUMS-${{ matrix.target }}.txt"
+          else
+            sha256sum "dist/${pkg_name}.tar.gz" > "dist/SHA256SUMS-${{ matrix.target }}.txt"
+          fi
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binName = "cf-ddns.exe"
+          $targetDir = "target/${{ matrix.target }}/release"
+          $pkgName = "cf-ddns-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "$targetDir/$binName" "dist/$binName"
+          Compress-Archive -Path "dist/$binName" -DestinationPath "dist/$pkgName.zip" -Force
+          Remove-Item "dist/$binName"
+          $hash = Get-FileHash "dist/$pkgName.zip" -Algorithm SHA256
+          "$($hash.Hash)  $pkgName.zip" | Out-File -Encoding ascii "dist/SHA256SUMS-${{ matrix.target }}.txt"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          make_latest: true

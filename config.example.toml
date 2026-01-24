@@ -1,0 +1,9 @@
+api_token = "cf_api_token_here"
+zone = "example.com"
+record_name = "home.example.com"
+record_type = "A"
+interval_seconds = 300
+proxied = false
+ttl = 1
+# interface_name = "en0"
+# record_type = "AAAA"
