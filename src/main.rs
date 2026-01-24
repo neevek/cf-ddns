@@ -8,10 +8,13 @@ mod config;
 mod ddns;
 mod ip;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 1)]
 async fn main() -> ExitCode {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt().with_env_filter(filter).with_ansi(true).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_ansi(true)
+        .init();
 
     if let Err(err) = run().await {
         error!("Error: {err:#}");
@@ -22,7 +25,11 @@ async fn main() -> ExitCode {
 }
 
 async fn run() -> Result<()> {
-    let config_path = resolve_config_path()?;
+    let args = match Args::parse()? {
+        Some(args) => args,
+        None => return Ok(()),
+    };
+    let config_path = args.config_path;
     let config = config::Config::load(&config_path)
         .with_context(|| format!("failed to load config at {config_path}"))?;
 
@@ -58,21 +65,58 @@ fn record_type(config: &config::Config) -> Result<RecordType> {
     }
 }
 
-fn resolve_config_path() -> Result<String> {
-    let mut args = env::args().skip(1);
-    while let Some(arg) = args.next() {
-        if arg == "--cfg" {
-            if let Some(path) = args.next() {
-                return Ok(path);
+struct Args {
+    config_path: String,
+}
+
+impl Args {
+    fn parse() -> Result<Option<Self>> {
+        let mut args = env::args().skip(1);
+        let mut config_path: Option<String> = None;
+
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "-h" | "--help" => {
+                    print_help();
+                    return Ok(None);
+                }
+                "--cfg" => {
+                    if let Some(path) = args.next() {
+                        config_path = Some(path);
+                    } else {
+                        bail!("--cfg requires a path");
+                    }
+                }
+                _ => {
+                    if let Some(rest) = arg.strip_prefix("--cfg=") {
+                        if rest.is_empty() {
+                            bail!("--cfg requires a path");
+                        }
+                        config_path = Some(rest.to_string());
+                    } else {
+                        bail!("unknown argument: {arg}");
+                    }
+                }
             }
-            bail!("--cfg requires a path");
         }
-        if let Some(rest) = arg.strip_prefix("--cfg=") {
-            if !rest.is_empty() {
-                return Ok(rest.to_string());
-            }
-            bail!("--cfg requires a path");
-        }
+
+        Ok(Some(Self {
+            config_path: config_path.unwrap_or_else(|| "config.toml".to_string()),
+        }))
     }
-    Ok("config.toml".to_string())
+}
+
+fn print_help() {
+    println!(
+        "\
+cf-ddns
+
+Usage:
+  cf-ddns [--cfg <path>]
+
+Options:
+  --cfg <path>     Path to config file (default: ./config.toml)
+  -h, --help       Show this help message
+"
+    );
 }
