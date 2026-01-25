@@ -3,6 +3,7 @@ zone = "example.com"
 record_name = "home.example.com"
 record_type = "A"
 interval_seconds = 300      # update interval in seconds
+retry_seconds = 30          # retry interval after failures
 proxied = false             # N/A for intranet
 ttl = 1                     # means 'auto' in cloudflare
 # interface_name = "en0"

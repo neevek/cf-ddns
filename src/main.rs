@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
+use clap::Parser;
 use lmrc_cloudflare::{CloudflareClient, dns::RecordType};
-use std::{env, process::ExitCode};
+use std::process::ExitCode;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -16,26 +17,37 @@ async fn main() -> ExitCode {
         .with_ansi(true)
         .init();
 
-    if let Err(err) = run().await {
-        error!("Error: {err:#}");
-        return ExitCode::from(1);
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            error!("{}", format_error(&err));
+            ExitCode::from(1)
+        }
     }
-
-    ExitCode::SUCCESS
 }
 
 async fn run() -> Result<()> {
-    let args = match Args::parse()? {
-        Some(args) => args,
-        None => return Ok(()),
-    };
-    let config_path = args.config_path;
-    let config = config::Config::load(&config_path)
-        .with_context(|| format!("failed to load config at {config_path}"))?;
+    let args = Args::parse();
 
+    let config_path = &args.config_path;
+    let config = config::Config::load(config_path)
+        .with_context(|| format!("failed to load config at {config_path}"))?;
     let record_type = record_type(&config)?;
     let record_name = config.record_name();
 
+    loop {
+        let next_delay = match update(&config, &record_name, record_type).await {
+            Ok(()) => std::time::Duration::from_secs(config.interval_seconds),
+            Err(err) => {
+                error!("{}", format_error(&err));
+                std::time::Duration::from_secs(config.retry_seconds)
+            }
+        };
+        tokio::time::sleep(next_delay).await;
+    }
+}
+
+async fn update(config: &config::Config, record_name: &str, record_type: RecordType) -> Result<()> {
     let client = CloudflareClient::builder()
         .api_token(config.api_token.clone())
         .build()?;
@@ -54,7 +66,7 @@ async fn run() -> Result<()> {
         config.interface_name.as_deref().unwrap_or("auto")
     );
 
-    ddns::run(&client, &config, &zone_id, &record_name, record_type).await
+    ddns::update(&client, config, &zone_id, record_name, record_type).await
 }
 
 fn record_type(config: &config::Config) -> Result<RecordType> {
@@ -65,58 +77,23 @@ fn record_type(config: &config::Config) -> Result<RecordType> {
     }
 }
 
+#[derive(Parser)]
+#[command(
+    name = "cf-ddns",
+    version,
+    about = "Cloudflare DDNS client (intranet-first)"
+)]
 struct Args {
+    #[arg(long = "cfg", default_value = "config.toml", value_name = "PATH")]
     config_path: String,
 }
 
-impl Args {
-    fn parse() -> Result<Option<Self>> {
-        let mut args = env::args().skip(1);
-        let mut config_path: Option<String> = None;
-
-        while let Some(arg) = args.next() {
-            match arg.as_str() {
-                "-h" | "--help" => {
-                    print_help();
-                    return Ok(None);
-                }
-                "--cfg" => {
-                    if let Some(path) = args.next() {
-                        config_path = Some(path);
-                    } else {
-                        bail!("--cfg requires a path");
-                    }
-                }
-                _ => {
-                    if let Some(rest) = arg.strip_prefix("--cfg=") {
-                        if rest.is_empty() {
-                            bail!("--cfg requires a path");
-                        }
-                        config_path = Some(rest.to_string());
-                    } else {
-                        bail!("unknown argument: {arg}");
-                    }
-                }
-            }
-        }
-
-        Ok(Some(Self {
-            config_path: config_path.unwrap_or_else(|| "config.toml".to_string()),
-        }))
+fn format_error(err: &anyhow::Error) -> String {
+    let top = err.to_string();
+    let root = err.root_cause().to_string();
+    if top == root {
+        format!("Error: {top}")
+    } else {
+        format!("Error: {top} (cause: {root})")
     }
-}
-
-fn print_help() {
-    println!(
-        "\
-cf-ddns
-
-Usage:
-  cf-ddns [--cfg <path>]
-
-Options:
-  --cfg <path>     Path to config file (default: ./config.toml)
-  -h, --help       Show this help message
-"
-    );
 }

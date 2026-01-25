@@ -12,6 +12,8 @@ pub struct Config {
     pub record_type: String,
     #[serde(default = "default_interval_seconds")]
     pub interval_seconds: u64,
+    #[serde(default = "default_retry_seconds")]
+    pub retry_seconds: u64,
     #[serde(default)]
     pub interface_name: Option<String>,
     #[serde(default)]
@@ -30,6 +32,10 @@ fn default_record_type() -> String {
 
 fn default_interval_seconds() -> u64 {
     300
+}
+
+fn default_retry_seconds() -> u64 {
+    30
 }
 
 fn default_public_ip_urls() -> Vec<String> {
@@ -64,6 +70,9 @@ impl Config {
         }
         if self.interval_seconds == 0 {
             bail!("interval_seconds must be greater than 0");
+        }
+        if self.retry_seconds == 0 {
+            bail!("retry_seconds must be greater than 0");
         }
         if self.use_public_ip && self.public_ip_urls.is_empty() {
             bail!("public_ip_urls must not be empty when use_public_ip is true");

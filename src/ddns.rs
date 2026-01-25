@@ -1,28 +1,10 @@
-use anyhow::{Context, Result};
-use lmrc_cloudflare::{CloudflareClient, dns::RecordType};
-use std::time::Duration;
-use tracing::{error, info};
-
 use crate::config::Config;
 use crate::ip::select_ip;
+use anyhow::{Context, Result};
+use lmrc_cloudflare::{CloudflareClient, dns::RecordType};
+use tracing::info;
 
-pub async fn run(
-    client: &CloudflareClient,
-    config: &Config,
-    zone_id: &str,
-    record_name: &str,
-    record_type: RecordType,
-) -> Result<()> {
-    let mut interval = tokio::time::interval(Duration::from_secs(config.interval_seconds));
-    loop {
-        interval.tick().await;
-        if let Err(err) = update(client, config, zone_id, record_name, record_type).await {
-            error!(error = %err, "ddns update failed");
-        }
-    }
-}
-
-async fn update(
+pub async fn update(
     client: &CloudflareClient,
     config: &Config,
     zone_id: &str,

@@ -35,6 +35,7 @@ Key fields:
 - `record_name`: DNS record name (example: `home.example.com`). Defaults to `zone`.
 - `record_type`: `A` or `AAAA`.
 - `interval_seconds`: Update interval in seconds.
+- `retry_seconds`: Retry interval after failures.
 - `interface_name`: Optional NIC name (example: `en0`, `eth0`).
 - `proxied`: Optional Cloudflare proxy toggle.
 - `ttl`: Optional TTL (1 means "auto" in Cloudflare).
