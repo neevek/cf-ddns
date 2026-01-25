@@ -1,7 +1,18 @@
 use anyhow::{Context, Result, bail};
 use get_if_addrs::{IfAddr, Interface, get_if_addrs};
+use std::net::IpAddr;
+use std::str::FromStr;
 
-pub fn select_local_ip(interface_name: Option<&str>, desired_v6: bool) -> Result<String> {
+use crate::config::Config;
+
+pub async fn select_ip(config: &Config, desired_v6: bool) -> Result<String> {
+    if config.use_public_ip {
+        return fetch_public_ip(&config.public_ip_urls, desired_v6).await;
+    }
+    select_local_ip(config.interface_name.as_deref(), desired_v6)
+}
+
+fn select_local_ip(interface_name: Option<&str>, desired_v6: bool) -> Result<String> {
     let addrs = get_if_addrs().context("failed to read network interfaces")?;
 
     if let Some(name) = interface_name {
@@ -29,6 +40,54 @@ pub fn select_local_ip(interface_name: Option<&str>, desired_v6: bool) -> Result
         if desired_v6 { "AAAA" } else { "A" },
         names.join(", ")
     );
+}
+
+async fn fetch_public_ip(urls: &[String], desired_v6: bool) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .context("failed to build HTTP client")?;
+
+    let mut last_err: Option<anyhow::Error> = None;
+    for url in urls {
+        let body = match client.get(url).send().await {
+            Ok(resp) => match resp.text().await {
+                Ok(text) => text,
+                Err(err) => {
+                    last_err = Some(err.into());
+                    continue;
+                }
+            },
+            Err(err) => {
+                last_err = Some(err.into());
+                continue;
+            }
+        };
+        let ip = body.trim();
+        if ip.is_empty() {
+            last_err = Some(anyhow::anyhow!("empty ip response from {url}"));
+            continue;
+        }
+        let parsed = match IpAddr::from_str(ip) {
+            Ok(value) => value,
+            Err(err) => {
+                last_err = Some(err.into());
+                continue;
+            }
+        };
+        let is_v6 = matches!(parsed, IpAddr::V6(_));
+        if desired_v6 != is_v6 {
+            last_err = Some(anyhow::anyhow!(
+                "ip family mismatch from {url}: got {}, expected {}",
+                parsed,
+                if desired_v6 { "IPv6" } else { "IPv4" }
+            ));
+            continue;
+        }
+        return Ok(parsed.to_string());
+    }
+
+    Err(last_err.unwrap_or_else(|| anyhow::anyhow!("no public IP URLs configured")))
 }
 
 fn pick_ip(addrs: &[Interface], desired_v6: bool, prefer_physical: bool) -> Option<String> {

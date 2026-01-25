@@ -1,7 +1,7 @@
 # cf-ddns
 
-Simple DDNS client for Cloudflare. This is designed primarily for intranet use where the machine's
-outbound interface IP should be published to a DNS record (no public IP lookup).
+Simple DDNS client for Cloudflare. It is designed primarily for intranet use where the machine's
+local interface IP is published to a DNS record, but it can also use public IP endpoints when enabled.
 
 ## Features
 
@@ -38,12 +38,15 @@ Key fields:
 - `interface_name`: Optional NIC name (example: `en0`, `eth0`).
 - `proxied`: Optional Cloudflare proxy toggle.
 - `ttl`: Optional TTL (1 means "auto" in Cloudflare).
+- `use_public_ip`: Optional toggle to use public IP endpoints (default: false).
+- `public_ip_urls`: Optional list of public IP endpoints. Defaults to three common endpoints if not set.
 
 ## Notes
 
-- This is meant for intranet scenarios. It does not query a public IP endpoint.
+- This is meant for intranet scenarios. It uses local interface IPs by default.
 - If auto-detection picks the wrong interface, set `interface_name` explicitly.
 - Logging uses `tracing`. Set `RUST_LOG=info` or higher for more detail.
+- Set `use_public_ip = true` if you want to publish your outbound public IP instead.
 
 ## Interface selection
 

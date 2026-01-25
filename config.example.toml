@@ -2,8 +2,13 @@ api_token = "cf_api_token_here"
 zone = "example.com"
 record_name = "home.example.com"
 record_type = "A"
-interval_seconds = 300
-proxied = false
-ttl = 1
+interval_seconds = 300      # update interval in seconds
+proxied = false             # N/A for intranet
+ttl = 1                     # means 'auto' in cloudflare
 # interface_name = "en0"
-# record_type = "AAAA"
+# use_public_ip = false       # set true to use public IP endpoints
+# public_ip_urls = [          # optional; defaults to three common endpoints
+#   "https://ifconfig.me/ip",
+#   "https://api.ipify.org",
+#   "https://icanhazip.com"
+# ]

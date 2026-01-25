@@ -4,7 +4,7 @@ use std::time::Duration;
 use tracing::{error, info};
 
 use crate::config::Config;
-use crate::ip::select_local_ip;
+use crate::ip::select_ip;
 
 pub async fn run(
     client: &CloudflareClient,
@@ -30,7 +30,7 @@ async fn update(
     record_type: RecordType,
 ) -> Result<()> {
     let desired_v6 = matches!(record_type, RecordType::AAAA);
-    let ip = select_local_ip(config.interface_name.as_deref(), desired_v6)?;
+    let ip = select_ip(config, desired_v6).await?;
     let existing = client
         .dns()
         .find_record(zone_id, record_name, record_type)

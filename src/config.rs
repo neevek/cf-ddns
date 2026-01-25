@@ -18,6 +18,10 @@ pub struct Config {
     pub proxied: Option<bool>,
     #[serde(default)]
     pub ttl: Option<u32>,
+    #[serde(default)]
+    pub use_public_ip: bool,
+    #[serde(default = "default_public_ip_urls")]
+    pub public_ip_urls: Vec<String>,
 }
 
 fn default_record_type() -> String {
@@ -26,6 +30,14 @@ fn default_record_type() -> String {
 
 fn default_interval_seconds() -> u64 {
     300
+}
+
+fn default_public_ip_urls() -> Vec<String> {
+    vec![
+        "https://api.ipify.org".to_string(),
+        "https://ifconfig.me/ip".to_string(),
+        "https://icanhazip.com".to_string(),
+    ]
 }
 
 impl Config {
@@ -52,6 +64,9 @@ impl Config {
         }
         if self.interval_seconds == 0 {
             bail!("interval_seconds must be greater than 0");
+        }
+        if self.use_public_ip && self.public_ip_urls.is_empty() {
+            bail!("public_ip_urls must not be empty when use_public_ip is true");
         }
         Ok(())
     }
