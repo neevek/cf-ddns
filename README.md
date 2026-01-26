@@ -40,7 +40,8 @@ Key fields:
 - `proxied`: Optional Cloudflare proxy toggle.
 - `ttl`: Optional TTL (1 means "auto" in Cloudflare).
 - `use_public_ip`: Optional toggle to use public IP endpoints (default: false).
-- `public_ip_urls`: Optional list of public IP endpoints. Defaults to three common endpoints if not set.
+- `public_ipv4_urls`: Optional list of IPv4 endpoints. Used when record type is `A`.
+- `public_ipv6_urls`: Optional list of IPv6 endpoints. Used when record type is `AAAA`.
 
 ## Notes
 

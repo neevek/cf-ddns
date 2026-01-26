@@ -7,7 +7,12 @@ use crate::config::Config;
 
 pub async fn select_ip(config: &Config, desired_v6: bool) -> Result<String> {
     if config.use_public_ip {
-        return fetch_public_ip(&config.public_ip_urls, desired_v6).await;
+        let urls = if desired_v6 {
+            &config.public_ipv6_urls
+        } else {
+            &config.public_ipv4_urls
+        };
+        return fetch_public_ip(urls, desired_v6).await;
     }
     select_local_ip(config.interface_name.as_deref(), desired_v6)
 }

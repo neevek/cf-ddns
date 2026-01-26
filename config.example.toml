@@ -8,8 +8,13 @@ proxied = false             # N/A for intranet
 ttl = 1                     # means 'auto' in cloudflare
 # interface_name = "en0"
 # use_public_ip = false       # set true to use public IP endpoints
-# public_ip_urls = [          # optional; defaults to three common endpoints
-#   "https://ifconfig.me/ip",
+# public_ipv4_urls = [       # optional; used for A records
 #   "https://api.ipify.org",
+#   "https://ifconfig.me/ip",
 #   "https://icanhazip.com"
+# ]
+# public_ipv6_urls = [       # optional; used for AAAA records
+#   "https://api64.ipify.org",
+#   "https://ipv6.icanhazip.com",
+#   "https://ifconfig.co/ip"
 # ]
