@@ -35,13 +35,21 @@ async fn run() -> Result<()> {
         .with_context(|| format!("failed to load config at {config_path}"))?;
     let record_type = record_type(&config)?;
     let record_name = config.record_name();
+    let client = CloudflareClient::builder()
+        .api_token(config.api_token.clone())
+        .build()?;
+    let zone_id = client
+        .zones()
+        .get_zone_id(&config.zone)
+        .await
+        .with_context(|| format!("failed to resolve zone_id for {}", config.zone))?;
 
     let tick = Duration::from_secs(1);
     let mut interval = tokio::time::interval(tick);
     let mut last_wall = SystemTime::now();
     let mut next_due = add_duration(
         SystemTime::now(),
-        update_with_delay(&config, &record_name, record_type).await,
+        update_with_delay(&config, &client, &zone_id, record_type, &record_name).await,
     );
 
     loop {
@@ -52,11 +60,16 @@ async fn run() -> Result<()> {
             .unwrap_or(Duration::ZERO);
 
         if wall_jump > tick + Duration::from_secs(2) {
+            info!(
+                "wake detected (wall_jump={}s), forcing immediate update",
+                wall_jump.as_secs()
+            );
             next_due = now;
         }
 
         if now.duration_since(next_due).is_ok() {
-            let delay = update_with_delay(&config, &record_name, record_type).await;
+            let delay =
+                update_with_delay(&config, &client, &zone_id, record_type, &record_name).await;
             next_due = add_duration(now, delay);
         }
 
@@ -66,10 +79,12 @@ async fn run() -> Result<()> {
 
 async fn update_with_delay(
     config: &config::Config,
-    record_name: &str,
+    client: &CloudflareClient,
+    zone_id: &str,
     record_type: RecordType,
+    record_name: &str,
 ) -> Duration {
-    match update(config, record_name, record_type).await {
+    match update(config, client, zone_id, record_type, record_name).await {
         Ok(()) => Duration::from_secs(config.interval_seconds),
         Err(err) => {
             error!("{}", format_error(&err));
@@ -78,16 +93,13 @@ async fn update_with_delay(
     }
 }
 
-async fn update(config: &config::Config, record_name: &str, record_type: RecordType) -> Result<()> {
-    let client = CloudflareClient::builder()
-        .api_token(config.api_token.clone())
-        .build()?;
-    let zone_id = client
-        .zones()
-        .get_zone_id(&config.zone)
-        .await
-        .with_context(|| format!("failed to resolve zone_id for {}", config.zone))?;
-
+async fn update(
+    config: &config::Config,
+    client: &CloudflareClient,
+    zone_id: &str,
+    record_type: RecordType,
+    record_name: &str,
+) -> Result<()> {
     info!(
         "ddns: zone={}, record={}, type={}, interval={}s, iface={}",
         config.zone,
@@ -97,7 +109,7 @@ async fn update(config: &config::Config, record_name: &str, record_type: RecordT
         config.interface_name.as_deref().unwrap_or("auto")
     );
 
-    ddns::update(&client, config, &zone_id, record_name, record_type).await
+    ddns::update(config, &client, &zone_id, record_type, record_name).await
 }
 
 fn record_type(config: &config::Config) -> Result<RecordType> {

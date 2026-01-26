@@ -5,11 +5,11 @@ use lmrc_cloudflare::{CloudflareClient, dns::RecordType};
 use tracing::info;
 
 pub async fn update(
-    client: &CloudflareClient,
     config: &Config,
+    client: &CloudflareClient,
     zone_id: &str,
-    record_name: &str,
     record_type: RecordType,
+    record_name: &str,
 ) -> Result<()> {
     let desired_v6 = matches!(record_type, RecordType::AAAA);
     let ip = select_ip(config, desired_v6).await?;
