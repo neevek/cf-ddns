@@ -2,6 +2,7 @@ use anyhow::{Context, Result, bail};
 use clap::Parser;
 use lmrc_cloudflare::{CloudflareClient, dns::RecordType};
 use std::process::ExitCode;
+use std::time::{Duration, SystemTime};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -35,15 +36,45 @@ async fn run() -> Result<()> {
     let record_type = record_type(&config)?;
     let record_name = config.record_name();
 
+    let tick = Duration::from_secs(1);
+    let mut interval = tokio::time::interval(tick);
+    let mut last_wall = SystemTime::now();
+    let mut next_due = add_duration(
+        SystemTime::now(),
+        update_with_delay(&config, &record_name, record_type).await,
+    );
+
     loop {
-        let next_delay = match update(&config, &record_name, record_type).await {
-            Ok(()) => std::time::Duration::from_secs(config.interval_seconds),
-            Err(err) => {
-                error!("{}", format_error(&err));
-                std::time::Duration::from_secs(config.retry_seconds)
-            }
-        };
-        tokio::time::sleep(next_delay).await;
+        interval.tick().await;
+        let now = SystemTime::now();
+        let wall_jump = now
+            .duration_since(last_wall)
+            .unwrap_or(Duration::ZERO);
+
+        if wall_jump > tick + Duration::from_secs(2) {
+            next_due = now;
+        }
+
+        if now.duration_since(next_due).is_ok() {
+            let delay = update_with_delay(&config, &record_name, record_type).await;
+            next_due = add_duration(now, delay);
+        }
+
+        last_wall = now;
+    }
+}
+
+async fn update_with_delay(
+    config: &config::Config,
+    record_name: &str,
+    record_type: RecordType,
+) -> Duration {
+    match update(config, record_name, record_type).await {
+        Ok(()) => Duration::from_secs(config.interval_seconds),
+        Err(err) => {
+            error!("{}", format_error(&err));
+            Duration::from_secs(config.retry_seconds)
+        }
     }
 }
 
@@ -96,4 +127,8 @@ fn format_error(err: &anyhow::Error) -> String {
     } else {
         format!("Error: {top} (cause: {root})")
     }
+}
+
+fn add_duration(base: SystemTime, duration: Duration) -> SystemTime {
+    base.checked_add(duration).unwrap_or(base)
 }
