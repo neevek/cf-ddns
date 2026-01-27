@@ -1,6 +1,6 @@
 [package]
 name = "cf-ddns"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 
 [dependencies]
@@ -11,6 +11,7 @@ lmrc-cloudflare = "0.3"
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 serde = { version = "1.0", features = ["derive"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+time = { version = "0.3", features = ["local-offset", "formatting"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "time"] }
 toml = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

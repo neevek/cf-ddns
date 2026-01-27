@@ -4,7 +4,7 @@ use lmrc_cloudflare::{CloudflareClient, dns::RecordType};
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
 use tracing::{error, info};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, fmt::time::OffsetTime};
 
 mod config;
 mod ddns;
@@ -13,9 +13,19 @@ mod ip;
 #[tokio::main(flavor = "multi_thread", worker_threads = 1)]
 async fn main() -> ExitCode {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+    let format = time::format_description::parse(
+        "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]",
+    )
+    .unwrap_or_else(|_| {
+        time::format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second]Z")
+            .unwrap()
+    });
+    let timer = OffsetTime::new(offset, format);
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_ansi(true)
+        .with_timer(timer)
         .init();
 
     match run().await {
